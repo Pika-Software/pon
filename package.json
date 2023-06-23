@@ -1,7 +1,0 @@
-{
-    "name": "pon",
-    "files": {
-        "lua/packages/pon/package.lua": "https://raw.githubusercontent.com/Pika-Software/pon/master/lua/packages/pon/package.lua",
-        "lua/packages/pon/init.lua": "https://raw.githubusercontent.com/Pika-Software/pon/master/lua/packages/pon/init.lua"
-    }
-}
