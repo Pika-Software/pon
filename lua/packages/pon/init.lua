@@ -17,9 +17,9 @@
 
 -- Libraries
 local string = string
-local table = table
 
 -- Variables
+local setmetatable = setmetatable
 local logger = gpm.Logger
 local tonumber = tonumber
 local Entity = Entity
@@ -28,8 +28,7 @@ local Angle = Angle
 local type = type
 local next = next
 
--- TODO: Remove `package.seeall` in future
-module( "pon", package.seeall )
+module( "pon" )
 
 -- encode
 do
@@ -41,38 +40,38 @@ do
 
     -- Table encode
     meta["table"] = function( tbl, cache )
-        local output = {}
-        if cache[tbl] then
-            output[#output + 1] = string.format( "(%x)", cache[tbl] )
+        local output = ""
+        if cache[ tbl ] then
+            output = output .. string.format( "(%x)", cache[ tbl ] )
             return
         end
 
         cacheSize = cacheSize + 1
-        cache[tbl] = cacheSize
+        cache[ tbl ] = cacheSize
 
         local first = next( tbl, nil )
         local predictedNumeric = 1
 
         -- starts with a numeric dealio
         if first == 1 then
-            output[#output + 1] = "{"
+            output = output .. "{"
 
-            for k, v in next, tbl do
-                if k ~= predictedNumeric then break end
+            for key, value in next, tbl do
+                if key ~= predictedNumeric then break end
                 predictedNumeric = predictedNumeric + 1
 
-                local tv = type( v )
-                if tv == "string" then
-                    local pid = cache[v]
+                local valueType = type( value )
+                if valueType == "string" then
+                    local pid = cache[ value ]
                     if pid then
-                        output[#output + 1] = string.format("(%x)", pid)
+                        output = output .. string.format( "(%x)", pid )
                     else
                         cacheSize = cacheSize + 1
-                        cache[v] = cacheSize
-                        output[#output + 1] = meta.string( v, output, cache )
+                        cache[ value ] = cacheSize
+                        output = output .. meta.string( value, output, cache )
                     end
                 else
-                    output[#output + 1] = meta[tv]( v, output, cache )
+                    output = output .. meta[ valueType ]( value, output, cache )
                 end
             end
 
@@ -82,47 +81,44 @@ do
         end
 
         if predictedNumeric == nil then
-            output[#output + 1] = "[" -- no array component
+            output = output .. "[" -- no array component
         else
-            output[#output + 1] = "~" -- array component came first so shit needs to happen
+            output = output .. "~" -- array component came first so shit needs to happen
         end
 
-        for k, v in next, tbl, predictedNumeric do
-            local tk, tv = type( k ), type( v )
+        for key, value in next, tbl, predictedNumeric do
+            local keyType, valueType = type( key ), type( value )
 
             -- WRITE KEY
-            if tk == "string" then
-                local pid = cache[k]
+            if keyType == "string" then
+                local pid = cache[ key ]
                 if pid then
-                    output[#output + 1] = string.format("(%x)",  pid )
+                    output = output .. string.format( "(%x)", pid )
                 else
                     cacheSize = cacheSize + 1
-                    cache[k] = cacheSize
-
-                    output[#output + 1] = meta.string( k, output, cache )
+                    cache[ key ] = cacheSize
+                    output = output .. meta.string( key, output, cache )
                 end
             else
-                output[#output + 1] = meta[tk]( k, output, cache)
+                output = output .. meta[ keyType ]( key, output, cache)
             end
 
             -- WRITE VALUE
-            if tv == "string" then
-                local pid = cache[v]
+            if valueType == "string" then
+                local pid = cache[ value ]
                 if pid then
-                    output[#output + 1] = string.format("(%x)",  pid )
+                    output = output .. string.format( "(%x)", pid )
                 else
                     cacheSize = cacheSize + 1
-                    cache[v] = cacheSize
-
-                    output[#output + 1] = meta.string( v, output, cache )
+                    cache[ value ] = cacheSize
+                    output = output .. meta.string( value, output, cache )
                 end
             else
-                output[#output + 1] = meta[tv]( v, output, cache )
+                output = output .. meta[ valueType ]( value, output, cache )
             end
         end
 
-        output[#output + 1] = "}"
-        return table.concat( output )
+        return output .. "}"
     end
 
     -- String encode
@@ -155,12 +151,12 @@ do
 
     -- Vector encode
     meta["Vector"] = function( vector )
-        return "V" .. vector[1] .. "," .. vector[2] .. "," .. vector[3] .. ";"
+        return "V" .. vector[ 1 ] .. "," .. vector[ 2 ] .. "," .. vector[ 3 ] .. ";"
     end
 
     -- Angle encode
     meta["Angle"] = function( angle )
-        return "A" .. angle[1] .. "," .. angle[2] .. "," .. angle[3] .. ";"
+        return "A" .. angle[ 1 ] .. "," .. angle[ 2 ] .. "," .. angle[ 3 ] .. ";"
     end
 
     -- Entity encode
@@ -171,7 +167,6 @@ do
     -- Aliases of entity
     meta["Vehicle"] = meta["Entity"]
     meta["NextBot"] = meta["Entity"]
-    meta["PhysObj"] = meta["Entity"]
     meta["Player"] = meta["Entity"]
     meta["Weapon"] = meta["Entity"]
     meta["NPC"] = meta["Entity"]
@@ -185,13 +180,13 @@ do
         cacheSize = 0
 
         local valueType = type( value )
-        local encoder = self[valueType]
+        local encoder = self[ valueType ]
         if type( encoder ) ~= "function" then
             ErrorNoHaltWithStack( "Type: `" .. valueType .. "` can not be encoded. Encoded as as pass-over value." )
             encoder = self["nil"]
         end
 
-        return self[valueType]( value, {} )
+        return encoder( value, {} )
     end
 
     encode = setmetatable( {}, meta )
@@ -205,47 +200,46 @@ do
     meta.__index = meta
 
     meta["{"] = function( index, str, cache )
-
         local cur = {}
-        cache[#cache + 1] = cur
+        cache[ #cache + 1 ] = cur
 
-        local k, v, tk, tv = 1, nil, nil, nil
+        local key, value, keyType, valueType = 1, nil, nil, nil
         while true do
-            tv = string.sub( str, index, index )
-            if not tv or tv == "~" then
+            valueType = string.sub( str, index, index )
+            if not valueType or valueType == "~" then
                 index = index + 1
                 break
             end
 
-            if tv == "}" then
+            if valueType == "}" then
                 return index + 1, cur
             end
 
             -- READ THE VALUE
             index = index + 1
-            index, v = meta[tv]( index, str, cache )
-            cur[k] = v
+            index, value = meta[ valueType ]( index, str, cache )
+            cur[ key ] = value
 
-            k = k + 1
+            key = key + 1
         end
 
         while true do
-            tk = string.sub( str, index, index )
-            if not tk or tk == "}" then
+            keyType = string.sub( str, index, index )
+            if not keyType or keyType == "}" then
                 index = index + 1
                 break
             end
 
             -- READ THE KEY
             index = index + 1
-            index, k = meta[tk]( index, str, cache )
+            index, key = meta[ keyType ]( index, str, cache )
 
             -- READ THE VALUE
-            tv = string.sub( str, index, index )
+            valueType = string.sub( str, index, index )
             index = index + 1
-            index, v = meta[tv]( index, str, cache )
+            index, value = meta[ valueType ]( index, str, cache )
 
-            cur[k] = v
+            cur[ key ] = value
         end
 
         return index, cur
@@ -253,32 +247,31 @@ do
 
     meta["["] = function( index, str, cache )
         local cur = {}
-        cache[#cache + 1] = cur
+        cache[ #cache + 1 ] = cur
 
-        local k, v, tk, tv = 1, nil, nil, nil
+        local key, value, keyType, valueType = 1, nil, nil, nil
         while true do
-            tk = string.sub( str, index, index )
-            if not tk or tk == "}" then
+            keyType = string.sub( str, index, index )
+            if not keyType or keyType == "}" then
                 index = index + 1
                 break
             end
 
             -- READ THE KEY
             index = index + 1
-            index, k = meta[tk]( index, str, cache )
-            if not k then continue end
+            index, key = meta[ keyType ]( index, str, cache )
+            if not key then continue end
 
             -- READ THE VALUE
-            tv = string.sub( str, index, index )
+            valueType = string.sub( str, index, index )
             index = index + 1
 
-            if not meta[tv] then
-                logger:Warn( "did not find type: %s", tv )
+            if not meta[ valueType ] then
+                logger:Warn( "did not find type: %s", valueType )
             end
 
-            index, v = meta[tv]( index, str, cache )
-
-            cur[k] = v
+            index, value = meta[ valueType ]( index, str, cache )
+            cur[ key ] = value
         end
 
         return index, cur
@@ -290,7 +283,7 @@ do
         local res = string.gsub( string.sub( str, index, finish - 1 ), "\\;", ";" )
         index = finish + 2
 
-        cache[#cache + 1] = res
+        cache[ #cache + 1 ] = res
         return index, res
     end
 
@@ -300,7 +293,7 @@ do
         local res = string.sub( str, index, finish - 1 )
         index = finish + 1
 
-        cache[#cache + 1] = res
+        cache[ #cache + 1 ] = res
         return index, res
     end
 
@@ -346,7 +339,7 @@ do
         local finish = string.find( str, ")", index, true )
         local num = tonumber( string.sub( str, index, finish - 1), 16 )
         index = finish + 1
-        return index, cache[num]
+        return index, cache[ num ]
     end
 
     -- BOOLEAN. ONE DATA TYPE FOR YES, ANOTHER FOR NO.
@@ -364,7 +357,7 @@ do
         local vecStr = string.sub( str, index, finish - 1 )
         index = finish + 1; -- update the index.
         local segs = string.Explode( ",", vecStr, false )
-        return index, Vector( tonumber( segs[1] ), tonumber( segs[2] ), tonumber( segs[3] ) )
+        return index, Vector( tonumber( segs[ 1 ] ), tonumber( segs[ 2 ] ), tonumber( segs[ 3 ] ) )
     end
 
     -- ANGLE
@@ -374,12 +367,12 @@ do
         index = finish + 1; -- update the index.
 
         local segs = string.Explode( ",", angStr, false )
-        return index, Angle( tonumber( segs[1] ), tonumber( segs[2] ), tonumber( segs[3] ) )
+        return index, Angle( tonumber( segs[ 1 ] ), tonumber( segs[ 2 ] ), tonumber( segs[ 3 ] ) )
     end
 
     -- ENTITY
     meta["E"] = function( index, str )
-        if str[index] == "#" then
+        if str[ index ] == "#" then
             index = index + 1
             return index, NULL
         end
@@ -406,24 +399,16 @@ do
 
     function meta:__call( str, decompress )
         local typeKey = string.sub( str, 1, 1 )
-        local decoder = self[typeKey]
+        local decoder = self[ typeKey ]
         if type( decoder ) ~= "function" then
             ErrorNoHaltWithStack( "Key: `" .. typeKey .. "` can not be decoded. Decoded as as pass-over value." )
             typeKey = "?"
         end
 
-        local _, value = self[typeKey]( 2, str, {} )
+        local _, value = decoder( 2, str, {} )
         return value
     end
 
     decode = setmetatable( {}, meta )
 
 end
-
--- local encoded = encode( "hello" )
-
--- print( "encoded", encoded )
-
--- local decoded = decode( encoded )
-
--- print( "decoded", decoded )
